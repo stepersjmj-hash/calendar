@@ -432,6 +432,16 @@
       localStorage.removeItem(LS_KEY); location.reload();
     });
 
+    // 프리셋
+    renderPresetSelect();
+    $('#presetSave').addEventListener('click', savePreset);
+    $('#presetName').addEventListener('keydown', function (e) { if (e.key === 'Enter') savePreset(); });
+    $('#presetSelect').addEventListener('change', function () { $('#presetName').value = this.value; });
+    $('#presetLoad').addEventListener('click', loadPreset);
+    $('#presetDelete').addEventListener('click', deletePreset);
+    $('#presetExport').addEventListener('click', exportPresets);
+    $('#presetImport').addEventListener('change', function () { var f = this.files && this.files[0]; this.value = ''; if (f) importPresets(f); });
+
     // 사이드바 접기(모바일)
     $('#toggleSide').addEventListener('click', function () { document.body.classList.toggle('side-open'); });
     window.addEventListener('resize', function () { renderMain(); });
@@ -489,6 +499,89 @@
       .then(function () { busy(false); c.width = c.height = 1; });
   }
 
+  // ---------- 프리셋 (설정 저장·불러오기, 사진 제외) ----------
+  var LS_PRESETS = 'mj-calendar-presets-v1';
+  function loadPresets() { try { var a = JSON.parse(localStorage.getItem(LS_PRESETS) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+  function storePresets(list) {
+    try { localStorage.setItem(LS_PRESETS, JSON.stringify(list)); return true; }
+    catch (e) { alert('브라우저 저장 공간이 부족해 프리셋을 저장하지 못했습니다. 로고 이미지가 크면 줄여 보세요.'); return false; }
+  }
+  function settingsSnapshot() {
+    var s = serialize(true);
+    delete s.pages;            // 사진·페이지별 레이아웃은 제외
+    return s;
+  }
+  function renderPresetSelect(selectedName) {
+    var sel = $('#presetSelect'), list = loadPresets();
+    sel.innerHTML = '';
+    if (!list.length) { sel.appendChild(opt('', '저장된 프리셋 없음')); sel.disabled = true; $('#presetLoad').disabled = $('#presetDelete').disabled = true; return; }
+    sel.disabled = false; $('#presetLoad').disabled = $('#presetDelete').disabled = false;
+    list.forEach(function (p) { sel.appendChild(opt(p.name, p.name + '  (' + (p.savedAt || '').slice(0, 10) + ')', p.name === selectedName)); });
+  }
+  function savePreset() {
+    var name = $('#presetName').value.trim() || $('#presetSelect').value;
+    if (!name) { $('#presetName').focus(); alert('프리셋 이름을 입력하세요.'); return; }
+    var list = loadPresets(), idx = -1;
+    list.forEach(function (p, i) { if (p.name === name) idx = i; });
+    if (idx >= 0 && !confirm('"' + name + '" 프리셋이 이미 있습니다. 현재 설정으로 덮어쓸까요?')) return;
+    var item = { name: name, savedAt: new Date().toISOString(), state: settingsSnapshot() };
+    if (idx >= 0) list[idx] = item; else list.push(item);
+    if (storePresets(list)) { renderPresetSelect(name); $('#presetName').value = ''; toast('프리셋 "' + name + '" 저장됨'); }
+  }
+  function applySettings(snap, keepPages) {
+    var pages = keepPages ? state.pages : {};
+    var next = deepMerge(DEFAULT, snap);
+    next.pages = pages;
+    state = next;
+    busy(true, '설정 적용 중…');
+    return restoreImages().then(function () { return Fonts.ensure(fontsList()); }).then(function () {
+      var keys = pageKeys();
+      if (keys.indexOf(current) < 0) current = keys[0];
+      selectedSlot = 0;
+      buildStatic(); buildPagePanel(); updateOutputInfo(); renderMain(); renderThumbs(); persist(); busy(false);
+    });
+  }
+  function loadPreset() {
+    var name = $('#presetSelect').value, p = null;
+    loadPresets().forEach(function (x) { if (x.name === name) p = x; });
+    if (!p) return;
+    applySettings(p.state, true).then(function () { toast('프리셋 "' + name + '" 적용됨 (사진은 그대로)'); });
+  }
+  function deletePreset() {
+    var name = $('#presetSelect').value;
+    if (!name || !confirm('"' + name + '" 프리셋을 삭제할까요?')) return;
+    storePresets(loadPresets().filter(function (p) { return p.name !== name; }));
+    renderPresetSelect();
+  }
+  function exportPresets() {
+    var list = loadPresets();
+    if (!list.length) { alert('내보낼 프리셋이 없습니다.'); return; }
+    var blob = new Blob([JSON.stringify({ app: 'mj-calendar', type: 'presets', version: 1, presets: list })], { type: 'application/json' });
+    download(blob, 'calendar_presets.json');
+  }
+  function importPresets(file) {
+    var fr = new FileReader();
+    fr.onload = function () {
+      try {
+        var data = JSON.parse(fr.result);
+        if (!data || data.app !== 'mj-calendar' || !Array.isArray(data.presets)) throw new Error('프리셋 파일이 아닙니다');
+        var list = loadPresets(), added = 0, replaced = 0;
+        data.presets.forEach(function (p) {
+          if (!p || !p.name || !p.state) return;
+          var idx = -1; list.forEach(function (x, i) { if (x.name === p.name) idx = i; });
+          if (idx >= 0) { list[idx] = p; replaced++; } else { list.push(p); added++; }
+        });
+        if (storePresets(list)) { renderPresetSelect(); toast('프리셋 가져오기: 추가 ' + added + '개, 덮어씀 ' + replaced + '개'); }
+      } catch (e) { alert('프리셋 파일을 읽을 수 없습니다: ' + e.message); }
+    };
+    fr.readAsText(file);
+  }
+  var toastTimer = null;
+  function toast(msg) {
+    var el = $('#toast'); el.textContent = msg; el.classList.add('on');
+    clearTimeout(toastTimer); toastTimer = setTimeout(function () { el.classList.remove('on'); }, 2500);
+  }
+
   function saveProject() {
     var data = { app: 'mj-calendar', version: 1, state: serialize(true) };
     var blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
@@ -499,13 +592,9 @@
     fr.onload = function () {
       try {
         var data = JSON.parse(fr.result);
-        if (!data || data.app !== 'mj-calendar') throw new Error('형식이 다릅니다');
-        state = deepMerge(DEFAULT, data.state);
-        busy(true, '프로젝트 불러오는 중…');
-        restoreImages().then(function () { return Fonts.ensure(fontsList()); }).then(function () {
-          current = pageKeys()[0]; selectedSlot = 0;
-          buildStatic(); buildPagePanel(); updateOutputInfo(); renderMain(); renderThumbs(); persist(); busy(false);
-        });
+        if (!data || data.app !== 'mj-calendar' || !data.state) throw new Error('형식이 다릅니다');
+        current = 'cover';
+        applySettings(data.state, false);
       } catch (e) { alert('프로젝트 파일을 읽을 수 없습니다: ' + e.message); }
     };
     fr.readAsText(file);

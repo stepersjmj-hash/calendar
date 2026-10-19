@@ -36,6 +36,9 @@ ES 모듈이 아닌 전역 스크립트 방식이라 `index.html`을 더블클�
 - 상태는 localStorage(`mj-calendar-state-v1`)에 자동 저장하되 **사진 dataURL은 제외**.
   사진까지 보관하려면 "프로젝트 저장"(`*.mjcal.json`, dataURL 포함)을 쓴다.
 - 업로드 사진은 긴 변 3200px로 축소해 메모리/속도를 맞춘다 (`MAX_IMG`).
+- 프리셋: localStorage(`mj-calendar-presets-v1`)에 `[{name, savedAt, state}]` 배열. `state`는 `serialize(true)`에서
+  `pages`만 뺀 것(로고 dataURL 포함, 사진 제외). 불러올 때 `applySettings(snap, keepPages=true)`로 현재 사진을 유지한다.
+  프로젝트 파일 열기도 같은 `applySettings`(keepPages=false)를 쓴다. 파일 내보내기/가져오기는 `{app:'mj-calendar', type:'presets', presets:[…]}`.
 
 ## 날짜 데이터 규칙 (caldata.js)
 
