@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MJ 달력 메이커 — 주문제작 달력 만들기</title>
+<meta name="description" content="사이즈·디자인·24절기·음력·공휴일·폰트·사진을 골라 월별 달력 이미지를 만드는 웹 앱">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700&display=swap">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<header class="topbar">
+  <button type="button" id="toggleSide" class="icon-btn" title="설정 열기/닫기">☰</button>
+  <h1>MJ 달력 메이커</h1>
+  <div class="spacer"></div>
+  <label class="btn ghost">프로젝트 열기<input type="file" id="loadProject" accept=".json,application/json" hidden></label>
+  <button type="button" id="saveProject" class="btn ghost">프로젝트 저장</button>
+  <button type="button" id="exportOne" class="btn">이 페이지 이미지</button>
+  <button type="button" id="exportAll" class="btn primary">전체 ZIP 내보내기</button>
+</header>
+
+<div class="layout">
+  <aside class="side">
+    <details open>
+      <summary><span class="num">1</span> 사이즈 · 출력</summary>
+      <div class="body">
+        <label class="field">프리셋 <select id="sizeId"></select></label>
+        <div class="row">
+          <label class="field">가로(mm) <input type="number" id="w" min="50" max="1000" step="1"></label>
+          <label class="field">세로(mm) <input type="number" id="h" min="50" max="1000" step="1"></label>
+          <button type="button" id="swap" class="btn small ghost" title="가로/세로 바꾸기">⇄</button>
+        </div>
+        <div class="row">
+          <label class="field">재단 여백(mm) <input type="number" id="bleed" min="0" max="10" step="0.5"></label>
+          <label class="field">상단 제본 여백(mm) <input type="number" id="topMargin" min="0" max="50" step="1"></label>
+        </div>
+        <div class="row">
+          <label class="field">해상도 <select id="dpi"><option value="150">150 dpi (화면용)</option><option value="200">200 dpi</option><option value="300">300 dpi (인쇄용)</option></select></label>
+          <label class="field">파일 형식 <select id="format"><option value="png">PNG</option><option value="jpg">JPG</option></select></label>
+        </div>
+        <p class="hint" id="outputInfo"></p>
+        <p class="hint">미리보기의 빨간 점선이 재단선입니다. 사진·배경은 재단 여백까지 채워집니다.</p>
+      </div>
+    </details>
+
+    <details open>
+      <summary><span class="num">2</span> 기간</summary>
+      <div class="body">
+        <div class="row">
+          <label class="field">시작 연도 <select id="startYear"></select></label>
+          <label class="field">시작 월 <select id="startMonth"></select></label>
+          <label class="field">개월 수 <input type="number" id="months" min="1" max="36"></label>
+        </div>
+        <div class="row">
+          <label class="check"><input type="checkbox" id="cover"> 표지 페이지 포함</label>
+          <label class="field">주 시작 <select id="weekStart"><option value="0">일요일</option><option value="1">월요일</option></select></label>
+          <label class="check"><input type="checkbox" id="fixedRows"> 항상 6줄</label>
+        </div>
+      </div>
+    </details>
+
+    <details open>
+      <summary><span class="num">3</span> 디자인</summary>
+      <div class="body">
+        <div id="templates" class="templates"></div>
+        <div class="row">
+          <label class="check"><input type="checkbox" id="accentUse"> 포인트 색 변경</label>
+          <input type="color" id="accent" title="포인트 색">
+          <label class="field">월 표기 <select id="monthLabel"><option value="en">숫자 + 영문</option><option value="ko">한글 (간지 포함)</option></select></label>
+        </div>
+        <div class="row">
+          <label class="check"><input type="checkbox" id="satBlue"> 토요일 파란색</label>
+          <label class="field">사진 영역 비율 <input type="number" id="photoFrac" min="0.1" max="0.8" step="0.05" placeholder="디자인 기본"></label>
+        </div>
+        <div class="row">
+          <label class="field">사진 간격(mm) <input type="number" id="photoGap" min="0" max="20" step="0.5"></label>
+          <label class="field">사진 모서리(mm) <input type="number" id="photoRadius" min="0" max="30" step="0.5" placeholder="디자인 기본"></label>
+        </div>
+      </div>
+    </details>
+
+    <details open>
+      <summary><span class="num">4</span> 추가 옵션</summary>
+      <div class="body">
+        <label class="check"><input type="checkbox" id="optHolidays"> 공휴일 <small>신정, 설날, 추석, 광복절, 대체공휴일… 빨간색</small></label>
+        <label class="check"><input type="checkbox" id="optTerms"> 24절기 <small>입춘, 청명, 하지, 동지…</small></label>
+        <label class="field">음력 날짜 <select id="optLunar"><option value="none">표시 안 함</option><option value="1,15">음력 1일·15일만</option><option value="1">음력 1일만</option><option value="all">매일 표시</option></select></label>
+        <label class="check"><input type="checkbox" id="optFestivals"> 명절·세시풍속 <small>정월대보름, 한식, 단오, 삼복, 칠석…</small></label>
+        <label class="check"><input type="checkbox" id="optMemorials"> 기념일 <small>식목일, 어버이날, 스승의날, 제헌절…</small></label>
+        <h4>사용자 정의 기념일</h4>
+        <div class="row custom-add">
+          <input type="text" id="cName" maxlength="12" placeholder="이름 (최대 12자)">
+          <select id="cKind"><option value="solar">양력</option><option value="lunar">음력</option></select>
+          <select id="cMonth"></select>
+          <select id="cDay"></select>
+          <label class="check"><input type="checkbox" id="cRed"> 빨강</label>
+          <button type="button" id="cAdd" class="btn small">등록</button>
+        </div>
+        <ul id="customList" class="custom-list"></ul>
+      </div>
+    </details>
+
+    <details>
+      <summary><span class="num">5</span> 폰트</summary>
+      <div class="body">
+        <label class="field">제목 (월 숫자·표지) <select id="fontTitle"></select></label>
+        <label class="field">날짜 숫자 <select id="fontNum"></select></label>
+        <label class="field">작은 글씨 (요일·음력·절기) <select id="fontSmall"></select></label>
+        <p class="hint">Google Fonts 에서 불러오므로 인터넷 연결이 필요합니다.</p>
+      </div>
+    </details>
+
+    <details open>
+      <summary><span class="num">6</span> 사진</summary>
+      <div class="body">
+        <div class="row">
+          <label class="btn small">대량 업로드 (월 순서대로 배치)<input type="file" id="bulkFiles" accept="image/*" multiple hidden></label>
+          <label class="check"><input type="checkbox" id="bulkCover"> 첫 장을 표지로</label>
+        </div>
+        <p class="hint">파일 이름 순서로 각 월에 한 장씩 들어갑니다. 아래에서 페이지별로 레이아웃·사진을 바꿀 수 있습니다.</p>
+        <div id="pagePanel" class="page-panel"></div>
+      </div>
+    </details>
+
+    <details>
+      <summary><span class="num">7</span> 표지 · 로고</summary>
+      <div class="body">
+        <label class="field">표지 제목 <input type="text" id="coverTitle" maxlength="30" placeholder="비우면 시작 연도"></label>
+        <label class="field">표지 부제 <input type="text" id="coverSub" maxlength="40" placeholder="CALENDAR"></label>
+        <label class="field">표지 사진 배치 <select id="coverStyle"><option value="full">전면 (제목을 사진 위에)</option><option value="inset">여백 있는 사진 + 아래 제목</option></select></label>
+        <h4>로고 (선택)</h4>
+        <div class="row">
+          <div id="logoPreview" class="logo-preview"></div>
+          <label class="btn small">로고 올리기<input type="file" id="logoFile" accept="image/*" hidden></label>
+          <button type="button" id="logoRemove" class="btn small ghost">제거</button>
+        </div>
+        <label class="field">로고 크기 <input type="range" id="logoScale" min="0.5" max="2.5" step="0.1"></label>
+        <p class="hint">배경이 투명한 PNG 를 권장합니다. 표지와 각 월 하단 가운데에 들어갑니다.</p>
+      </div>
+    </details>
+
+    <div class="body foot">
+      <button type="button" id="reset" class="btn small ghost danger">처음부터 다시</button>
+      <p class="hint">설정은 브라우저에 자동 저장되지만 사진은 저장되지 않습니다. 작업을 이어가려면 "프로젝트 저장" 파일을 보관하세요.</p>
+    </div>
+  </aside>
+
+  <main class="main">
+    <div class="strip" id="strip"></div>
+    <div class="preview-head"><span id="pageTitle"></span><span class="hint">← → 키로 페이지 이동 · 사진 드래그로 위치 조절 · 휠로 확대/축소</span></div>
+    <div class="preview-wrap" id="previewWrap"><canvas id="preview"></canvas></div>
+  </main>
+</div>
+
+<div id="busy" class="busy"><div class="spinner"></div><span>준비 중…</span></div>
+
+<script src="js/vendor/korean-lunar-calendar.min.js"></script>
+<script src="js/vendor/jszip.min.js"></script>
+<script src="js/solarterms.js"></script>
+<script src="js/caldata.js"></script>
+<script src="js/fonts.js"></script>
+<script src="js/templates.js"></script>
+<script src="js/render.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
